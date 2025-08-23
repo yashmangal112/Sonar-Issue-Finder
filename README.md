@@ -88,6 +88,6 @@ Contributions are always welcome! Feel free to open a pull request.
 
 ### License
 
-This extension is licensed under the [MIT License](LICENSE.md).
+This extension is licensed under the [MIT License](LICENSE).
 
 Enjoy!
