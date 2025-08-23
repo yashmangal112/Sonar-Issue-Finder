@@ -1,0 +1,141 @@
+{
+  "name": "sonar-issue-finder",
+  "displayName": "Sonar Issue Finder",
+  "description": "Fetch issues from SonarQube and show them in VS Code (like SonarLint).",
+  "version": "0.0.2",
+  "publisher": "yashmangal112",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yashmangal112/Sonar-Issue-Finder"
+  },
+  "engines": {
+    "vscode": "^1.103.0"
+  },
+  "categories": [
+    "Linters"
+  ],
+  "activationEvents": [
+    "onStartupFinished",
+    "onDidSaveTextDocument",
+    "onDidChangeActiveTextEditor"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "sonarExtension.selectSeverities",
+        "title": "Select Issue Types",
+        "icon": "$(checklist)"
+      },
+      {
+        "command": "sonarExtension.refreshIssues",
+        "title": "Refresh Issues",
+        "icon": {
+          "light": "media/refresh.png",
+          "dark": "media/refresh.png"
+        }
+      },
+      {
+        "command": "sonarExtension.setFilter",
+        "title": "Toggle Issue Scope",
+        "icon": "$(filter)"
+      },
+      {
+        "command": "sonarExtension.clearIssues",
+        "title": "Clear Issues",
+        "icon": "$(trashcan)"
+      }
+    ],
+    "viewsContainers": {
+      "panel": [
+        {
+          "id": "sonarqubePanel",
+          "title": "Sonar Issue Finder",
+          "icon": "images/sonar.png"
+        }
+      ]
+    },
+    "views": {
+      "sonarqubePanel": [
+        {
+          "id": "sonarIssuesView",
+          "name": "Issues"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "sonarExtension.selectSeverities",
+          "when": "view == sonarIssuesView",
+          "group": "navigation@1"
+        },
+        {
+          "command": "sonarExtension.setFilter",
+          "when": "view == sonarIssuesView",
+          "group": "navigation@2"
+        },
+        {
+          "command": "sonarExtension.refreshIssues",
+          "when": "view == sonarIssuesView",
+          "group": "navigation@3"
+        },
+        {
+          "command": "sonarExtension.clearIssues",
+          "when": "view == sonarIssuesView",
+          "group": "navigation@4"
+        }
+      ]
+    },
+    "configuration": {
+      "properties": {
+        "sonarExtension.maxIssues": {
+          "type": "number",
+          "default": 1000,
+          "description": "Maximum number of issues to fetch from SonarQube (default: 1000). Set higher if your project is large, but may impact performance."
+        },
+        "sonarExtension.selectedSeverities": {
+          "type": "array",
+          "default": [
+            "BLOCKER"
+          ],
+          "items": {
+            "type": "string",
+            "enum": [
+              "BLOCKER",
+              "CRITICAL",
+              "MAJOR",
+              "MINOR",
+              "INFO"
+            ]
+          },
+          "description": "Selected severities to filter issues in the SonarQube panel."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint src",
+    "test": "vscode-test",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.10",
+    "@types/node": "22.x",
+    "@types/node-fetch": "^2.6.13",
+    "@types/vscode": "^1.103.0",
+    "@typescript-eslint/eslint-plugin": "^8.39.0",
+    "@typescript-eslint/parser": "^8.39.0",
+    "@vscode/test-cli": "^0.0.11",
+    "@vscode/test-electron": "^2.5.2",
+    "eslint": "8.57.1",
+    "typescript": "^5.9.2"
+  },
+  "dependencies": {
+    "@types/eslint": "^9.6.1",
+    "node-fetch": "^2.7.0"
+  }
+}
