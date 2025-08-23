@@ -2,8 +2,9 @@
   "name": "sonar-issue-finder",
   "displayName": "Sonar Issue Finder",
   "description": "Fetch issues from SonarQube and show them in VS Code (like SonarLint).",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "publisher": "yashmangal112",
+  "icon": "media/sonar.png",
   "repository": {
     "type": "git",
     "url": "https://github.com/yashmangal112/Sonar-Issue-Finder"
@@ -51,7 +52,7 @@
         {
           "id": "sonarqubePanel",
           "title": "Sonar Issue Finder",
-          "icon": "images/sonar.png"
+          "icon": "media/sonar.png"
         }
       ]
     },
