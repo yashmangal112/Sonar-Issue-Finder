@@ -26,21 +26,17 @@ export class SonarIssuesProvider implements vscode.TreeDataProvider<TreeItemElem
   private _onDidChangeTreeData = new vscode.EventEmitter<TreeItemElement | undefined | null | void>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
-  // Use a Map to group issues by file path for a hierarchical view
   private issuesByFile: Map<string, SonarIssue[]> = new Map();
 
   private treeView: vscode.TreeView<TreeItemElement> | undefined;
   constructor() { }
 
-  // A new public method to set the tree view instance after it has been created
   public setTreeView(treeView: vscode.TreeView<TreeItemElement>) {
     this.treeView = treeView;
   }
 
-  // This method is called by the main extension to update the issues
   setIssues(issues: SonarIssue[]): void {
     this.issuesByFile.clear();
-    // Group issues by file path
     issues.forEach((issue) => {
       if (!this.issuesByFile.has(issue.filePath)) {
         this.issuesByFile.set(issue.filePath, []);
@@ -50,20 +46,17 @@ export class SonarIssuesProvider implements vscode.TreeDataProvider<TreeItemElem
     if (issues.length === 0 && this.treeView) {
       this.treeView.message = " All good! No issues found.";
     } else if (this.treeView) {
-      this.treeView.message = undefined; // Clear the message
+      this.treeView.message = undefined;
     }
-    this._onDidChangeTreeData.fire(); // Notify VS Code to refresh the view
+    this._onDidChangeTreeData.fire();
   }
 
-  // Get the tree item for a given element (file or issue)
   getTreeItem(element: TreeItemElement): vscode.TreeItem {
     if (typeof element === "string") {
-      // This is a file path (the parent node)
       const uri = vscode.Uri.file(element);
       const collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
       const treeItem = new vscode.TreeItem(vscode.Uri.file(element), vscode.TreeItemCollapsibleState.Expanded);
 
-      // Set properties to look like a file in the Problems panel
       treeItem.label = vscode.workspace.asRelativePath(uri);
       treeItem.resourceUri = uri;
       treeItem.iconPath = vscode.ThemeIcon.File;
@@ -72,22 +65,18 @@ export class SonarIssuesProvider implements vscode.TreeDataProvider<TreeItemElem
 
       return treeItem;
     } else {
-      // This is an issue (the child node)
       const treeItem = new vscode.TreeItem(element.message);
 
-      // Set properties to look like a problem item
       treeItem.tooltip = `${element.rule} [${element.severity}]`;
       treeItem.description = `Line ${element.line}`;
       treeItem.collapsibleState = vscode.TreeItemCollapsibleState.None;
 
-      // Add a command to open the file at the issue line
       treeItem.command = {
         command: "sonarExtension.openIssue",
         title: "Open Issue",
         arguments: [element],
       };
 
-      // Set icons with colors based on severity, matching VS Code's theme
       switch (element.severity) {
         case "BLOCKER":
         case "CRITICAL":
@@ -111,14 +100,11 @@ export class SonarIssuesProvider implements vscode.TreeDataProvider<TreeItemElem
   // Get the children for a given element
   getChildren(element?: TreeItemElement): Thenable<TreeItemElement[]> {
     if (!element) {
-      // Return the list of files (root level of the tree)
       return Promise.resolve(Array.from(this.issuesByFile.keys()).sort());
     } else if (typeof element === "string") {
-      // The element is a file path, so return its issues
       const issues = this.issuesByFile.get(element);
       return Promise.resolve(issues || []);
     } else {
-      // The element is a SonarIssue (a leaf node), so it has no children
       return Promise.resolve([]);
     }
   }
@@ -138,7 +124,7 @@ export async function selectSeverities() {
 
   const items: vscode.QuickPickItem[] = allSeverities.map(sev => ({
     label: sev,
-    picked: selectedSeverities.includes(sev), // ✅ Pre-check already selected
+    picked: selectedSeverities.includes(sev),
   }));
 
   const picked = await vscode.window.showQuickPick(items, {
@@ -198,17 +184,17 @@ export function activate(context: vscode.ExtensionContext) {
   provider.setTreeView(treeView);
 
   statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
-  statusBarItem.command = "sonarExtension.refreshIssues"; // click to refresh
+  statusBarItem.command = "sonarExtension.refreshIssues";
   statusBarItem.show();
   context.subscriptions.push(statusBarItem);
-  updateStatusBar(0); // init with 0 issues
+  updateStatusBar(0);
 
   // Refresh Command
   context.subscriptions.push(
     vscode.commands.registerCommand("sonarExtension.clearIssues", () => {
       if (diagnosticCollection) {
         diagnosticCollection.clear();
-        updateStatusBar(0); // Update the status bar to show 0 issues
+        updateStatusBar(0);
         autoRefreshEnabled = false;
 
         provider.setIssues([]);
@@ -224,9 +210,20 @@ export function activate(context: vscode.ExtensionContext) {
           cancellable: false,
         },
         async () => {
-          const issues = await refreshAllIssues(currentMode);
-          provider.setIssues(issues);
-          updateStatusBar(issues.length);
+          try {
+            const issues = await refreshAllIssues(currentMode);
+            provider.setIssues(issues);
+            updateStatusBar(issues.length);
+          } catch (error: unknown) {
+            const message =
+              error instanceof Error ? error.message : String(error);
+            vscode.window.showErrorMessage(
+              `Failed to refresh Sonar issues: ${message}`
+            );
+            console.error("Refresh failed:", error);
+            provider.setIssues([]);
+            updateStatusBar(0);
+          }
         }
       );
     })
@@ -236,6 +233,7 @@ export function activate(context: vscode.ExtensionContext) {
   // Filter Command
   context.subscriptions.push(
     vscode.commands.registerCommand("sonarExtension.setFilter", async () => {
+      try{
       const choice = await vscode.window.showQuickPick(
         [
           "All files (Overall Code)",
@@ -265,17 +263,33 @@ export function activate(context: vscode.ExtensionContext) {
       const issues = await refreshAllIssues(currentMode);
       provider.setIssues(issues);
       updateStatusBar(issues.length);
+    }catch (error: unknown) {
+        vscode.window.showErrorMessage(
+          `Failed to set filter: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+        console.error("Set filter failed:", error);
+      }
     })
   );
 
   // Open Issue
   context.subscriptions.push(
     vscode.commands.registerCommand("sonarExtension.openIssue", async (issue: SonarIssue) => {
+      try{
       const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(issue.filePath));
       const editor = await vscode.window.showTextDocument(doc);
       const pos = new vscode.Position(issue.line - 1, 0);
       editor.selection = new vscode.Selection(pos, pos);
       editor.revealRange(new vscode.Range(pos, pos));
+      }catch(error: unknown){
+        vscode.window.showErrorMessage(
+          `Failed to open issue: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+      }
     })
   );
 
@@ -283,7 +297,15 @@ export function activate(context: vscode.ExtensionContext) {
   // --- Select Severities Command ---
   context.subscriptions.push(
     vscode.commands.registerCommand("sonarExtension.selectSeverities", async () => {
-      await selectSeverities(); // uses your QuickPick + saves config
+      try{
+      await selectSeverities();
+      }catch(error: unknown){
+        vscode.window.showErrorMessage(
+          `Failed to select severities: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+      }
     })
   );
   // Auto-refresh on editor change (only for current file modes)
@@ -291,18 +313,34 @@ export function activate(context: vscode.ExtensionContext) {
     if (!editor) { return; }
 
     if (currentMode === "overall-file" || currentMode === "new-file") {
+      try{
       const issues = await refreshAllIssues(currentMode);
       provider.setIssues(issues);
       updateStatusBar(issues.length);
+      }catch(error: unknown){
+        vscode.window.showErrorMessage(
+          `Failed to refresh issues on editor change: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+      }
     }
   });
 
   // Auto-refresh on save
   vscode.workspace.onDidSaveTextDocument(async () => {
     if (autoRefreshEnabled) {
+      try{
       const issues = await refreshAllIssues(currentMode);
       provider.setIssues(issues);
       updateStatusBar(issues.length);
+      }catch(error: unknown){
+        vscode.window.showErrorMessage(
+          `Failed to refresh issues on save: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+      }
     }
   });
 
@@ -314,12 +352,20 @@ export function activate(context: vscode.ExtensionContext) {
       cancellable: false,
     },
     async () => {
+      try{
       const issues = await refreshAllIssues(currentMode);
       provider.setIssues(issues);
       updateStatusBar(issues.length);
+      }catch(error: unknown){
+        vscode.window.showErrorMessage(
+          `Failed to fetch issues: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+        updateStatusBar(0);
+      }
     }
   );
-
 }
 
 // ---- Fetch / Refresh ----
@@ -338,14 +384,26 @@ async function refreshAllIssues(mode: Mode): Promise<SonarIssue[]> {
     const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
     const { server, token, projectKey } = config;
 
+    if (!server || !token || !projectKey) {
+      vscode.window.showErrorMessage(
+        "Sonar configuration is invalid. Please provide 'server', 'token', and 'projectKey' in .vscode/sonar-config.json file."
+      );
+      return [];
+    }
+
     const currentFile = vscode.window.activeTextEditor?.document.uri.fsPath;
     const isFileMode = mode.endsWith("file");
     const isNewMode = mode.startsWith("new");
 
     let sonarIssues: SonarIssue[] = [];
     if (!isNewMode) {
+      try{
       const apiIssues = await fetchIssues(server, token, projectKey, isFileMode ? currentFile : undefined);
       sonarIssues = filterByWorkspace(apiIssues, projectKey, workspaceRoot, isFileMode ? currentFile : undefined);
+      }catch(err:any){
+        vscode.window.showErrorMessage("Failed to fetch SonarQube issues");
+        console.error(err);
+      }
     }
 
     let localIssues: SonarIssue[] = [];
@@ -369,12 +427,15 @@ async function refreshAllIssues(mode: Mode): Promise<SonarIssue[]> {
     const filteredSonarIssues = sonarIssues.filter(issue => selectedSeverities.includes(issue.severity));
     const filteredLocalIssues = localIssues.filter(issue => selectedSeverities.includes(issue.severity));
 
-    // Call a new function that takes both lists
+    if (!sonarIssues || sonarIssues.length === 0) {
+      vscode.window.showErrorMessage("Something went wrong, Failed to fetch issues.");
+      updateStatusBar(0);
+      return [];
+    }
     showSeparatedDiagnostics(filteredSonarIssues, filteredLocalIssues);
 
     const allFilteredIssues = [...filteredSonarIssues, ...filteredLocalIssues];
 
-    // Update provider with the combined list
     const provider = new SonarIssuesProvider();
     provider.setIssues(allFilteredIssues);
     updateStatusBar(allFilteredIssues.length);
@@ -382,10 +443,18 @@ async function refreshAllIssues(mode: Mode): Promise<SonarIssue[]> {
     return allFilteredIssues;
   }
   catch (error) {
+    let message = "Something went wrong";
+    if (error instanceof Error) {
+      message = error.message;
+    } else if (typeof error === "string") {
+      message = error;
+    }
+
+    vscode.window.showErrorMessage(`Failed to analyze issues: ${message}`);
     console.error(
-      error instanceof Error ? error.message : "Something went wrong"
+      error instanceof Error ? message : "Something went wrong"
     );
-    return []; // return empty SonarIssue[] to satisfy type
+    return [];
   }
 }
 
@@ -402,14 +471,13 @@ async function fetchIssues(server: string, token: string, projectKey: string, fi
   }
 
 
-  console.log("extraFilter", extraFilter);
-
   const config = vscode.workspace.getConfiguration("sonarExtension");
   const severities = config.get<string[]>("selectedSeverities", ["BLOCKER"]);
 
   const severitiesParam = severities.join(",");
   const statuses = "OPEN,REOPENED";
 
+  try{
   while (true) {
     const res = await fetch(
       `${server}/api/issues/search?componentKeys=${projectKey}&severities=${severitiesParam}&statuses=${statuses}&p=${page}&ps=${pageSize}${extraFilter}`,
@@ -421,6 +489,14 @@ async function fetchIssues(server: string, token: string, projectKey: string, fi
     allIssues.push(...data.issues);
     if (data.paging.total <= page * pageSize) {break;}
     page++;
+  }
+  }catch(error: unknown){
+    let message = "Unknown error occurred";
+    if (error instanceof Error) {
+      message = error.message;
+    }
+    vscode.window.showErrorMessage(`Failed to fetch issues`);
+    return [];
   }
   return allIssues;
 }
@@ -509,7 +585,6 @@ function mapSeverity(sev: string): { vscodeSeverity: vscode.DiagnosticSeverity; 
     case "INFO":
       return { vscodeSeverity: vscode.DiagnosticSeverity.Information, prefix: "INFO" };
     default:
-      // Fallback for unexpected severities
       return { vscodeSeverity: vscode.DiagnosticSeverity.Information, prefix: "INFO" };
   }
 }
@@ -517,25 +592,22 @@ function mapSeverity(sev: string): { vscodeSeverity: vscode.DiagnosticSeverity; 
 // Helper function to map ESLint's severity to Sonar-like severity
 function mapEslintSeverity(eslintSeverity: number | string): string {
   if (eslintSeverity === 2 || eslintSeverity === "error") {
-    return "CRITICAL"; // Or "BLOCKER", depending on your preference
+    return "CRITICAL";
   }
   if (eslintSeverity === 1 || eslintSeverity === "warn") {
-    return "MAJOR"; // Or "MINOR", etc.
+    return "MAJOR";
   }
   return "INFO";
 }
 
 // ---- Show Diagnostics ----
-// This function will clear and show diagnostics with separate sources
 function showSeparatedDiagnostics(sonarIssues: SonarIssue[], localIssues: SonarIssue[]) {
   diagnosticCollection.clear();
 
   sonarIssues.forEach((issue) => {
     const range = new vscode.Range(issue.line - 1, 0, issue.line - 1, 100);
-    // Get the mapped severity and a descriptive prefix
     const { vscodeSeverity, prefix } = mapSeverity(issue.severity);
 
-    // Construct the diagnostic message with a clear prefix
     const message = `${prefix}: ${issue.message} (${issue.rule})`;
 
     const diag = new vscode.Diagnostic(
@@ -548,7 +620,6 @@ function showSeparatedDiagnostics(sonarIssues: SonarIssue[], localIssues: SonarI
     diagnosticCollection.set(uri, [...(diagnosticCollection.get(uri) || []), diag]);
   });
 
-  // Second, handle local ESLint issues
   localIssues.forEach((issue) => {
     const range = new vscode.Range(issue.line - 1, 0, issue.line - 1, 100);
     const { vscodeSeverity, prefix } = mapSeverity(issue.severity);

@@ -2,7 +2,7 @@
   "name": "sonar-issue-finder",
   "displayName": "Sonar Issue Finder",
   "description": "Fetch issues from SonarQube and show them in VS Code (like SonarLint).",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "publisher": "yashmangal112",
   "icon": "media/sonar.png",
   "repository": {
@@ -18,7 +18,11 @@
   "activationEvents": [
     "onStartupFinished",
     "onDidSaveTextDocument",
-    "onDidChangeActiveTextEditor"
+    "onDidChangeActiveTextEditor",
+    "onCommand:sonarExtension.refreshIssues",
+    "onCommand:sonarExtension.setFilter",
+    "onCommand:sonarExtension.selectSeverities",
+    "onCommand:sonarExtension.clearIssues"
   ],
   "main": "./out/extension.js",
   "contributes": {
