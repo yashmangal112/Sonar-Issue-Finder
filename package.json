@@ -2,7 +2,7 @@
   "name": "sonar-issue-finder",
   "displayName": "Sonar Issue Finder",
   "description": "Fetch issues from SonarQube and show them in VS Code (like SonarLint).",
-  "version": "0.0.4",
+  "version": "0.1.5",
   "publisher": "yashmangal112",
   "icon": "media/sonar.png",
   "repository": {
@@ -48,7 +48,7 @@
       {
         "command": "sonarExtension.clearIssues",
         "title": "Clear Issues",
-        "icon": "$(trashcan)"
+        "icon": "$(circle-slash)"
       }
     ],
     "viewsContainers": {
@@ -136,11 +136,11 @@
     "@typescript-eslint/parser": "^8.39.0",
     "@vscode/test-cli": "^0.0.11",
     "@vscode/test-electron": "^2.5.2",
-    "eslint": "8.57.1",
     "typescript": "^5.9.2"
   },
   "dependencies": {
     "@types/eslint": "^9.6.1",
+    "eslint": "8.57.1",
     "node-fetch": "^2.7.0"
   }
 }

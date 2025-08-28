@@ -110,6 +110,40 @@ export class SonarIssuesProvider implements vscode.TreeDataProvider<TreeItemElem
   }
 }
 
+export class ESLintCodeActionProvider implements vscode.CodeActionProvider {
+    public static readonly providedCodeActionKinds = [
+        vscode.CodeActionKind.QuickFix
+    ];
+
+    provideCodeActions(
+        document: vscode.TextDocument,
+        range: vscode.Range | vscode.Selection,
+        context: vscode.CodeActionContext,
+        token: vscode.CancellationToken
+    ): vscode.ProviderResult<vscode.CodeAction[]> {
+
+        const actions: vscode.CodeAction[] = [];
+        
+        for (const diagnostic of context.diagnostics) {
+            
+            const fix = (diagnostic as any)?.fix; // The fix property is not in the official Diagnostic type
+            if (fix) {
+                const action = new vscode.CodeAction(`Fix with ESLint: ${diagnostic.message}`, vscode.CodeActionKind.QuickFix);
+                action.diagnostics = [diagnostic]; // Associate the fix with the diagnostic
+                action.isPreferred = true; // Mark this as a preferred quick fix
+
+                const edit = new vscode.WorkspaceEdit();
+                edit.replace(document.uri, new vscode.Range(fix.range[0], fix.range[1]), fix.text);
+                action.edit = edit;
+
+                actions.push(action);
+            }
+        }
+
+        return actions;
+    }
+}
+
 // ---- Modes ----
 type Mode = "overall-all" | "overall-file" | "new-all" | "new-file";
 let currentMode: Mode = "overall-all";
@@ -174,6 +208,8 @@ function updateStatusBar(issueCount: number) {
 
 // ---- Activate ----
 export function activate(context: vscode.ExtensionContext) {
+  console.log('Sonar Issue Finder is activating!');
+  try{
   diagnosticCollection = vscode.languages.createDiagnosticCollection("sonar");
   context.subscriptions.push(diagnosticCollection);
 
@@ -348,7 +384,7 @@ export function activate(context: vscode.ExtensionContext) {
   vscode.window.withProgress(
     {
       location: vscode.ProgressLocation.Notification,
-      title: "Fetching issues...",
+      title: "Fetching Sonar issues...",
       cancellable: false,
     },
     async () => {
@@ -366,6 +402,24 @@ export function activate(context: vscode.ExtensionContext) {
       }
     }
   );
+
+  context.subscriptions.push(
+    vscode.languages.registerCodeActionsProvider(
+        { scheme: 'file', language: 'javascript' },
+        new ESLintCodeActionProvider(),
+        { providedCodeActionKinds: ESLintCodeActionProvider.providedCodeActionKinds }
+    ),
+    vscode.languages.registerCodeActionsProvider(
+        { scheme: 'file', language: 'typescript' },
+        new ESLintCodeActionProvider(),
+        { providedCodeActionKinds: ESLintCodeActionProvider.providedCodeActionKinds }
+    )
+  );
+}
+catch(error){
+    console.error('An error occurred during extension activation:', error);
+    vscode.window.showErrorMessage(`Something went wrong with the Sonar Extension. Please check the Developer Tools for more details: ${error}`);
+}
 }
 
 // ---- Fetch / Refresh ----
@@ -396,10 +450,12 @@ async function refreshAllIssues(mode: Mode): Promise<SonarIssue[]> {
     const isNewMode = mode.startsWith("new");
 
     let sonarIssues: SonarIssue[] = [];
-    if (!isNewMode) {
+    let fetchSuccess = false;
+    if (currentMode.startsWith("overall-")) {
       try{
-      const apiIssues = await fetchIssues(server, token, projectKey, isFileMode ? currentFile : undefined);
-      sonarIssues = filterByWorkspace(apiIssues, projectKey, workspaceRoot, isFileMode ? currentFile : undefined);
+        const apiIssues = await fetchIssues(server, token, projectKey, isFileMode ? currentFile : undefined);
+        sonarIssues = filterByWorkspace(apiIssues, projectKey, workspaceRoot, isFileMode ? currentFile : undefined);
+        fetchSuccess = true;
       }catch(err:any){
         vscode.window.showErrorMessage("Failed to fetch SonarQube issues");
         console.error(err);
@@ -407,7 +463,7 @@ async function refreshAllIssues(mode: Mode): Promise<SonarIssue[]> {
     }
 
     let localIssues: SonarIssue[] = [];
-    if (isNewMode || mode === "overall-all") {
+    if (currentMode.startsWith("new-")) {
       const filesToAnalyzeUris: vscode.Uri[] = isFileMode && currentFile
         ? [vscode.Uri.file(currentFile)]
         : await vscode.workspace.findFiles("**/*.{js,ts,jsx,tsx}", "**/node_modules/**");
@@ -427,14 +483,18 @@ async function refreshAllIssues(mode: Mode): Promise<SonarIssue[]> {
     const filteredSonarIssues = sonarIssues.filter(issue => selectedSeverities.includes(issue.severity));
     const filteredLocalIssues = localIssues.filter(issue => selectedSeverities.includes(issue.severity));
 
-    if (!sonarIssues || sonarIssues.length === 0) {
-      vscode.window.showErrorMessage("Something went wrong, Failed to fetch issues.");
-      updateStatusBar(0);
-      return [];
+    const allFilteredIssues = [...filteredSonarIssues, ...filteredLocalIssues];
+
+    if (!fetchSuccess) {
+        updateStatusBar(0);
+        return [];
+    } else if (allFilteredIssues.length === 0) {
+        vscode.window.showInformationMessage("No issues found for the selected project and filters.");
+        updateStatusBar(0);
     }
+
     showSeparatedDiagnostics(filteredSonarIssues, filteredLocalIssues);
 
-    const allFilteredIssues = [...filteredSonarIssues, ...filteredLocalIssues];
 
     const provider = new SonarIssuesProvider();
     provider.setIssues(allFilteredIssues);
